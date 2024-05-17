@@ -6,6 +6,7 @@
 	},
 	"dependencies": {
 		"@alchemy/aa-core": "^3.12.3",
+		"dotenv": "^16.4.5",
 		"viem": "^2.10.9"
 	}
 }
