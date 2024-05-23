@@ -110,21 +110,25 @@ async function placeOrder() {
   // const orderSize = (collateral * leverage) / ethPrice;
 
   const order = {
-    "a": "ETH", 
-    "b": "true",
-    "s": "0.0147",
-    "p": "1670",
-    "r": "false",
-    "t": { "limit": { "tif": "Gtc" } },
-  };
+    "a": 1,
+    "b": true,
+    "p": "3820",
+    "s": "0.01",
+    "r": false,
+    "t": {
+      "limit": {
+        "tif": "Gtc"
+      }
+    }
+  }
 
   const action = {
-    grouping: "na",
     type: "order",
     orders: [order],
+    grouping: "na",
   };
 
-  const nonce = 716445994;
+  const nonce = Date.now();
 
   const privateKey = process.env.PRIVATE_KEY;
   if (!privateKey) {
@@ -141,33 +145,33 @@ async function placeOrder() {
     
     
     
-    const order_action = 
-    {
-      "action": {
-        "type": "order",
-        "orders": [
-        {
-          "a": 128,
-          "b": true,
-          "p": "1670",
-          "s": "0.0147",
-          "r": false,
-          "t": {
-            "limit": {
-              "tif": "Gtc"
-            }
-          }
-        }
-      ],
-      "grouping": "na"
-    }
-  }
-  ;
+  // const order_action = 
+  //   {
+  //     "action": {
+  //       "type": "order",
+  //       "orders": [
+  //       {
+  //         "a": 128,
+  //         "b": true,
+  //         "p": "1670",
+  //         "s": "0.0147",
+  //         "r": false,
+  //         "t": {
+  //           "limit": {
+  //             "tif": "Gtc"
+  //           }
+  //         }
+  //       }
+  //     ],
+  //     "grouping": "na"
+  //   }
+  // };
+
   const payload = {
-    action: order_action,
-    nonce: 716445994,
+    action: action,
+    nonce: nonce,
     signature: signature,
-    vaultAddress: null
+    vaultAddress: null,
   };
   
   // console.log("Payload to be sent:", JSON.stringify(payload, null, 2));
@@ -180,7 +184,7 @@ async function placeOrder() {
       }
     );
 
-    console.log("Order Response:", response.data);
+    console.log("Order Response:", response.data.response.data);
   } catch (error:any) {
     console.error("Error placing order:", error.message);
   }
