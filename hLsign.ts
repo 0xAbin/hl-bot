@@ -1,5 +1,5 @@
 import { encode } from "@msgpack/msgpack";
-import { keccak256 } from "viem";
+import { Hex, keccak256 } from "viem";
 import { config } from 'dotenv';
 import { ethers } from 'ethers';
 import axios from 'axios';
@@ -16,7 +16,7 @@ const IS_MAINNET = true;
 const phantomDomain = {
   name: "Exchange",
   version: "1",
-  chainId: 1337, // Arbitrum One chain ID
+  chainId: 1337, 
   verifyingContract: "0x0000000000000000000000000000000000000000",
 };
 
@@ -30,11 +30,13 @@ const agentTypes = {
 async function signStandardL1Action(
   action: any,
   wallet: ethers.Wallet,
-  nonce: number
+  nonce: number,
+  vaultAddress: null
 ): Promise<CustomSignature> {
+  const connectionId = hashAction(action, vaultAddress, nonce);
   const phantomAgent = {
     source: IS_MAINNET ? "a" : "b",
-    connectionId: hashAction(action, nonce),
+    connectionId: connectionId,
   };
   const payloadToSign = {
     domain: phantomDomain,
@@ -43,7 +45,7 @@ async function signStandardL1Action(
     message: phantomAgent,
   };
 
-  console.log("Signing payload:", JSON.stringify(payloadToSign, null, 2));
+  // console.log("Signing payload:", JSON.stringify(payloadToSign, null, 2));
 
   const signedAgent = await wallet.signTypedData(
     payloadToSign.domain,
@@ -56,16 +58,30 @@ async function signStandardL1Action(
   return splitSig(signedAgent);
 }
 
-function hashAction(action: any, nonce: number): string {
+function hashAction(
+  action: unknown,
+  vaultAddress: string | null,
+  nonce: number
+): Hex {
   const msgPackBytes = encode(action);
   console.log("action hash", Buffer.from(msgPackBytes).toString("base64"));
-  const additionalBytesLength = 9;
+  const additionalBytesLength = vaultAddress === null ? 9 : 29;
   const data = new Uint8Array(msgPackBytes.length + additionalBytesLength);
   data.set(msgPackBytes);
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   view.setBigUint64(msgPackBytes.length, BigInt(nonce));
-  view.setUint8(msgPackBytes.length + 8, 0);
+  if (vaultAddress === null) {
+    view.setUint8(msgPackBytes.length + 8, 0);
+  } else {
+    view.setUint8(msgPackBytes.length + 8, 1);
+    data.set(addressToBytes(vaultAddress), msgPackBytes.length + 9);
+  }
   return keccak256(data);
+}
+
+function addressToBytes(address: string): Uint8Array {
+  const hex = address.startsWith("0x") ? address.substring(2) : address;
+  return Uint8Array.from(Buffer.from(hex, "hex"));
 }
 
 function splitSig(sig: string): CustomSignature {
@@ -89,26 +105,27 @@ function splitSig(sig: string): CustomSignature {
 async function placeOrder() {
   const leverage = 20;
   const collateral = 1; // 1 $ Trade
-  const ethPrice = 3000; // need to get Eth price api from hl
+  // const ethPrice = 3000; // need to get Eth price api from hl
 
-  const orderSize = (collateral * leverage) / ethPrice;
+  // const orderSize = (collateral * leverage) / ethPrice;
 
   const order = {
-    asset: 10, // Asset index for ETH/USDC
-    isBuy: true,
-    limitPx: ethPrice.toFixed(8),
-    sz: orderSize.toFixed(8),
-    reduceOnly: false,
-    orderType: { limit: { tif: "Gtc" } },
+    "a": "ETH", 
+    "b": "true",
+    "s": "0.0147",
+    "p": "1670",
+    "r": "false",
+    "t": { "limit": { "tif": "Gtc" } },
   };
 
   const action = {
-    type: "order",
     grouping: "na",
+    type: "order",
     orders: [order],
   };
 
-  const nonce = Date.now();
+  const nonce = 716445994;
+
   const privateKey = process.env.PRIVATE_KEY;
   if (!privateKey) {
     throw new Error("PRIVATE_KEY not set in .env file");
@@ -118,23 +135,54 @@ async function placeOrder() {
   console.log("Wallet address:", wallet.address);
 
   try {
-    const signature = await signStandardL1Action(action, wallet, nonce);
-    const payload = {
-      action: action,
-      nonce: nonce,
-      signature: signature,
-      vaultAddress: null,
-    };
+    const signature = await signStandardL1Action(action, wallet, nonce, null);
+    console.log("Signature:", signature);
 
-    console.log("Payload to be sent:", JSON.stringify(payload, null, 2));
+    
+    
+    
+    const order_action = 
+    {
+      "action": {
+        "type": "order",
+        "orders": [
+        {
+          "a": 128,
+          "b": true,
+          "p": "1670",
+          "s": "0.0147",
+          "r": false,
+          "t": {
+            "limit": {
+              "tif": "Gtc"
+            }
+          }
+        }
+      ],
+      "grouping": "na"
+    }
+  }
+  ;
+  const payload = {
+    action: order_action,
+    nonce: 716445994,
+    signature: signature,
+    vaultAddress: null
+  };
+  
+  // console.log("Payload to be sent:", JSON.stringify(payload, null, 2));
 
-    const response = await axios.post('https://api.hyperliquid.xyz/exchange', payload, {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const response = await axios.post(
+      "https://api.hyperliquid.xyz/exchange",
+      payload,
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
     console.log("Order Response:", response.data);
-  } catch (error) {
-    console.error("Error placing order:", error);
+  } catch (error:any) {
+    console.error("Error placing order:", error.message);
   }
 }
 
